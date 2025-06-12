@@ -157,6 +157,7 @@ debug*/
 *.pdf
 
 cache/
+/.cache/
 
 # playground
 playground.txt

@@ -82,6 +82,14 @@ class Blip2OPT(Blip2Base):
             layer.output = None
             layer.intermediate = None
 
+        # Freeze Q-Former
+        if True:
+            for name, param in self.Qformer.named_parameters():
+                param.requires_grad = False
+            self.Qformer = self.Qformer.eval()
+            self.Qformer.train = disabled_train
+            logging.info("freeze Q-Former")
+
         self.opt_tokenizer = AutoTokenizer.from_pretrained(opt_model, use_fast=False)
         self.opt_model = OPTForCausalLM.from_pretrained(
             opt_model, torch_dtype=torch.float16
@@ -433,6 +441,6 @@ class Blip2OPT(Blip2Base):
             max_txt_len=max_txt_len,
             apply_lemmatizer=apply_lemmatizer,
         )
-        model.load_checkpoint_from_config(cfg)
+        model.load_checkpoint_from_config(cfg) # NOTE: Model is initialized with pretrained weights, therefore we need to load ckpt
 
         return model
