@@ -16,7 +16,6 @@ from lavis.models.blip2_models.blip2 import Blip2Base, disabled_train
 # from lavis.models.blip2_models.modeling_opt import OPTForCausalLM, OPTConfig
 from transformers import AutoTokenizer, OPTForCausalLM, OPTConfig
 import transformers
-import os
 
 
 @registry.register_model("blip2_opt")
@@ -87,20 +86,6 @@ class Blip2OPT(Blip2Base):
         self.opt_model = OPTForCausalLM.from_pretrained(
             opt_model, torch_dtype=torch.float16
         )
-
-        # 获取当前进程的 local_rank，这是DDP环境下的GPU索引
-        # 在多卡训练中，每个进程的 LOCAL_RANK 环境变量会被 torch.distributed.run 自动设置
-        # local_rank = int(os.environ.get("LOCAL_RANK", 0))
-        
-        # self.opt_model = OPTForCausalLM.from_pretrained(
-        #     opt_model,
-        #     load_in_4bit=True,
-        #     bnb_4bit_compute_dtype=torch.bfloat16,
-        #     bnb_4bit_quant_type="nf4",
-        #     bnb_4bit_use_double_quant=True,
-        #     # 关键修改：告诉 accelerate 将整个模型加载到当前进程对应的GPU上
-        #     device_map={'': local_rank}
-        # )
         for name, param in self.opt_model.named_parameters():
             param.requires_grad = False
         self.eos_token_id = self.opt_tokenizer(
@@ -119,74 +104,14 @@ class Blip2OPT(Blip2Base):
         self._apply_lemmatizer = apply_lemmatizer
         self._lemmatizer = None       
 
-    # def forward(self, samples):
-    #     image = samples["image"]
-    #     with self.maybe_autocast():
-    #         image_embeds = self.ln_vision(self.visual_encoder(image))
-    #     image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(
-    #         image.device
-    #     )
-
-    #     query_tokens = self.query_tokens.expand(image_embeds.shape[0], -1, -1)
-    #     query_output = self.Qformer.bert(
-    #         query_embeds=query_tokens,
-    #         encoder_hidden_states=image_embeds,
-    #         encoder_attention_mask=image_atts,
-    #         return_dict=True,
-    #     )
-
-    #     inputs_opt = self.opt_proj(query_output.last_hidden_state)
-    #     atts_opt = torch.ones(inputs_opt.size()[:-1], dtype=torch.long).to(image.device)
-
-    #     self.opt_tokenizer.padding_side = "right"
-
-    #     text = [t + "\n" for t in samples["text_input"]]
-
-    #     opt_tokens = self.opt_tokenizer(
-    #         text,
-    #         return_tensors="pt",
-    #         padding="longest",
-    #         truncation=True,
-    #         max_length=self.max_txt_len,
-    #     ).to(image.device)
-
-    #     targets = opt_tokens.input_ids.masked_fill(
-    #         opt_tokens.input_ids == self.opt_tokenizer.pad_token_id, -100
-    #     )
-    #     if self.prompt:
-    #         targets[:, : self.prompt_length] = -100  # do not apply loss to the prompt
-
-    #     empty_targets = (
-    #         torch.ones(atts_opt.size(), dtype=torch.long).to(image.device).fill_(-100)
-    #     )
-    #     targets = torch.cat([empty_targets, targets], dim=1)
-
-    #     inputs_embeds = self.opt_model.model.decoder.embed_tokens(opt_tokens.input_ids)
-    #     inputs_embeds = torch.cat([inputs_opt, inputs_embeds], dim=1)
-    #     attention_mask = torch.cat([atts_opt, opt_tokens.attention_mask], dim=1)
-
-    #     with self.maybe_autocast():
-    #         outputs = self.opt_model(
-    #             inputs_embeds=inputs_embeds,
-    #             attention_mask=attention_mask,
-    #             return_dict=True,
-    #             labels=targets,
-    #         )
-    #     loss = outputs.loss
-
-    #     return {"loss": loss}
-
-    # 在 blip2_opt.py 文件中，用这个新版本完整替换旧的 forward 方法
     def forward(self, samples):
-        # =================================================================
-        # 步骤1：提取图像特征 (与之前一致)
-        # =================================================================
         image = samples["image"]
         with self.maybe_autocast():
             image_embeds = self.ln_vision(self.visual_encoder(image))
         image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(
             image.device
         )
+
         query_tokens = self.query_tokens.expand(image_embeds.shape[0], -1, -1)
         query_output = self.Qformer.bert(
             query_embeds=query_tokens,
@@ -194,74 +119,46 @@ class Blip2OPT(Blip2Base):
             encoder_attention_mask=image_atts,
             return_dict=True,
         )
+
         inputs_opt = self.opt_proj(query_output.last_hidden_state)
         atts_opt = torch.ones(inputs_opt.size()[:-1], dtype=torch.long).to(image.device)
-    
-    
-        # =================================================================
-        # 步骤2：准备文本输入和目标 (与之前一致)
-        # =================================================================
-        # 依赖 vqa.py 的修改来得到 "text_output"
-        # prompt 包含问题, text_output 是答案
-        prompt = [self.prompt.format(t) for t in samples["text_input"]]
-        text_output = samples["text_output"]
-    
-        # 将 "问题" 和 "答案" 拼接成一个完整的序列
-        text_input = [p + out for p, out in zip(prompt, text_output)]
-    
-        # 对拼接后的完整文本进行分词
+
         self.opt_tokenizer.padding_side = "right"
+
+        text = [t + "\n" for t in samples["text_input"]]
+
         opt_tokens = self.opt_tokenizer(
-            text_input,
+            text,
             return_tensors="pt",
             padding="longest",
             truncation=True,
             max_length=self.max_txt_len,
         ).to(image.device)
-    
-    
-        # =================================================================
-        # 步骤3：构建与输入序列长度完全对齐的、带掩码的labels (核心修复)
-        # =================================================================
-        # 首先，创建只包含文本部分的labels
-        text_labels = opt_tokens.input_ids.clone()
-        text_labels[text_labels == self.opt_tokenizer.pad_token_id] = -100
-        
-        # 其次，对问题/prompt部分进行掩码
-        for i, prompt_text in enumerate(prompt):
-            prompt_token_len = self.opt_tokenizer(
-                prompt_text, return_tensors="pt", add_special_tokens=False
-            ).input_ids.size(1)
-            text_labels[i, :prompt_token_len] = -100
-    
-        # 再次，创建与视觉token对应的掩码部分 (全是-100)
-        visual_labels = (
-            torch.ones(atts_opt.size(), dtype=torch.long)
-            .to(image.device)
-            .fill_(-100)
+
+        targets = opt_tokens.input_ids.masked_fill(
+            opt_tokens.input_ids == self.opt_tokenizer.pad_token_id, -100
         )
-        
-        # 最后，将视觉掩码和文本掩码拼接，得到与最终输入长度一致的final_labels
-        final_labels = torch.cat([visual_labels, text_labels], dim=1)
-    
-    
-        # =================================================================
-        # 步骤4：组合最终输入并计算loss (输入和labels长度现在一致了)
-        # =================================================================
-        # 拼接视觉特征和文本特征作为输入
-        inputs_embeds = self.opt_model.get_input_embeddings()(opt_tokens.input_ids)
+        if self.prompt:
+            targets[:, : self.prompt_length] = -100  # do not apply loss to the prompt
+
+        empty_targets = (
+            torch.ones(atts_opt.size(), dtype=torch.long).to(image.device).fill_(-100)
+        )
+        targets = torch.cat([empty_targets, targets], dim=1)
+
+        inputs_embeds = self.opt_model.model.decoder.embed_tokens(opt_tokens.input_ids)
         inputs_embeds = torch.cat([inputs_opt, inputs_embeds], dim=1)
         attention_mask = torch.cat([atts_opt, opt_tokens.attention_mask], dim=1)
-    
+
         with self.maybe_autocast():
             outputs = self.opt_model(
                 inputs_embeds=inputs_embeds,
                 attention_mask=attention_mask,
                 return_dict=True,
-                labels=final_labels, # <-- 使用长度对齐的final_labels
+                labels=targets,
             )
         loss = outputs.loss
-    
+
         return {"loss": loss}
 
     @torch.no_grad()

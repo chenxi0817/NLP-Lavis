@@ -6,7 +6,6 @@
 """
 
 import argparse
-import os
 import random
 
 import numpy as np
@@ -21,18 +20,14 @@ from lavis.common.optims import (
     LinearWarmupCosineLRScheduler,
     LinearWarmupStepLRScheduler,
 )
-from lavis.common.registry import registry
 from lavis.common.utils import now
 
 # imports modules for registration
 from lavis.datasets.builders import *
 from lavis.models import *
 from lavis.processors import *
-from lavis.runners import *
+from lavis.runners.runner_base import RunnerBase
 from lavis.tasks import *
-
-# train.py 顶部
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
 
 def parse_args():
@@ -65,15 +60,6 @@ def setup_seeds(config):
     cudnn.deterministic = True
 
 
-def get_runner_class(cfg):
-    """
-    Get runner class from config. Default to epoch-based runner.
-    """
-    runner_cls = registry.get_runner_class(cfg.run_cfg.get("runner", "runner_base"))
-
-    return runner_cls
-
-
 def main():
     # allow auto-dl completes on main process without timeout when using NCCL backend.
     # os.environ["NCCL_BLOCKING_WAIT"] = "1"
@@ -96,37 +82,10 @@ def main():
     datasets = task.build_datasets(cfg)
     model = task.build_model(cfg)
 
-    # =================================================================
-    # --- 新增的LoRA/QLoRA改造逻辑 ---
-    print("======> 正在对LLM应用LoRA/QLoRA改造 <======")
-    
-    # 步骤A（QLoRA需要）：为k-bit量化训练做准备
-    # 这会修复一些兼容性问题
-    model.opt_model = prepare_model_for_kbit_training(model.opt_model)
-    
-    # 步骤B：定义LoRA配置
-    lora_config = LoraConfig(
-        r=16,  # LoRA的秩，一个关键超参数，通常是8, 16, 32, 64
-        lora_alpha=32, # LoRA的alpha，通常是r的两倍
-        target_modules=["q_proj", "v_proj"], # 指定要对哪些线性层应用LoRA，对于OPT模型，通常是q_proj和v_proj
-        lora_dropout=0.05,
-        bias="none",
-        task_type="CAUSAL_LM" # 任务类型，对于OPT是因果语言模型
-    )
-    
-    # 步骤C：将LoRA配置应用到模型上
-    model.opt_model = get_peft_model(model.opt_model, lora_config)
-    
-    # 步骤D（可选但推荐）：打印出可训练参数，验证LoRA是否应用成功
-    model.print_trainable_parameters()
-    print("======> LoRA/QLoRA 改造完成 <======")
-    # =================================================================
-
-
-    runner = get_runner_class(cfg)(
+    runner = RunnerBase(
         cfg=cfg, job_id=job_id, task=task, model=model, datasets=datasets
     )
-    runner.train()
+    runner.evaluate(skip_reload=True)
 
 
 if __name__ == "__main__":

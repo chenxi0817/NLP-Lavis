@@ -1,0 +1,89 @@
+# =================================================================================
+# FINAL & DEFINITIVE: InstructBLIP with FlanT5-XL - VQA Fine-tuning
+# =================================================================================
+
+model:
+  # 架构和模型类型明确指定为 InstructBLIP
+  arch: blip2_t5_instruct
+  model_type: flant5xl
+  
+  # 加载官方的InstructBLIP预训练权重作为起点
+  load_pretrained: True
+  pretrained: "https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/InstructBLIP/instruct_blip_flanxl_trimmed.pth"
+
+  # --- InstructBLIP 推荐的参数高效微调（PEFT）策略 ---
+  # 冻结ViT和LLM，只训练Q-Former，这是最稳定且高效的做法
+  freeze_vit: True
+  freeze_qformer: False
+  freeze_llm: True
+  
+  # 开启指令感知Q-Former，这是InstructBLIP的核心
+  qformer_text_input: True
+
+datasets:
+  # 直接使用为VQA设计的coco_vqa数据集，我们的代码修改已使其兼容
+  coco_vqa:
+    vis_processor:
+      train:
+        name: "blip_image_train"
+        image_size: 224
+      eval:
+        name: "blip_image_eval"
+        image_size: 224
+        
+    text_processor:
+      train:
+        name: "blip_question"
+        # 推荐为训练集提供一个明确的指令prompt
+        prompt: "Based on the image, answer the following question with a short answer."
+      eval:
+        name: "blip_question"
+    
+    # build_info: 您可以注释掉这部分，让LAVIS自动下载标准VQA数据集，
+    # 或者取消注释，并填入您自己的本地数据路径。
+    # build_info:
+    #   images:
+    #     storage: "coco/images/"
+    #   annotations:
+    #     train:
+    #       storage: ["coco/annotations/vqa_train.json", "coco/annotations/vqa_val.json"]
+    #     val:
+    #       storage: ["coco/annotations/vqa_val_eval.json", "coco/annotations/answer_list.json", "coco/annotations/v2_OpenEnded_mscoco_val2014_questions.json", "coco/annotations/v2_mscoco_val2014_annotations.json"]
+
+run:
+  # 使用 'vqa' 任务，我们已经通过修改vqa.py使其能够处理生成式模型
+  task: vqa
+
+  # 关键：指定使用生成模式，这将触发 valid_step 中的 if 分支
+  inference_method: "generate"
+  
+  # 优化器和学习率配置
+  lr_sched: "linear_warmup_cosine_lr"
+  init_lr: 1e-5
+  min_lr: 0
+  warmup_lr: 1e-8
+  warmup_steps: 1000
+  weight_decay: 0.05
+  
+  # 训练过程控制
+  max_epoch: 5
+  batch_size_train: 16  # 从一个较小的值开始，确保稳定
+  batch_size_eval: 32
+  num_workers: 4
+  
+  # 所有必需的基础参数
+  seed: 42
+  output_dir: "output/InstructBLIP/VQA_Finetune"
+  amp: True
+  evaluate: False
+  resume_ckpt_path: null
+  
+  # 数据集切片
+  train_splits: ["train"]
+  valid_splits: ["val"]
+
+  # 分布式训练配置
+  device: "cuda"
+  world_size: 3 # 请根据您的GPU数量修改
+  dist_url: "env://"
+  distributed: True

@@ -118,7 +118,8 @@ def main():
     model.opt_model = get_peft_model(model.opt_model, lora_config)
     
     # 步骤D（可选但推荐）：打印出可训练参数，验证LoRA是否应用成功
-    model.print_trainable_parameters()
+    # model.print_trainable_parameters()
+    model.opt_model.print_trainable_parameters() 
     print("======> LoRA/QLoRA 改造完成 <======")
     # =================================================================
 

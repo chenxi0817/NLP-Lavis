@@ -1,1 +1,1 @@
-python -m torch.distributed.run --nproc_per_node=8 evaluate.py --cfg-path lavis/projects/blip2/eval/vqav2_zeroshot_opt_eval.yaml
+python -m torch.distributed.run --nproc_per_node=3 evaluate.py --cfg-path /root/aigc/zsh/nlp/LAVIS/lavis/projects/blip2/eval/vqav2_zeroshot_opt_eval.yaml

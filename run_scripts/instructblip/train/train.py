@@ -31,9 +31,6 @@ from lavis.processors import *
 from lavis.runners import *
 from lavis.tasks import *
 
-# train.py 顶部
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Training")
@@ -95,33 +92,6 @@ def main():
     task = tasks.setup_task(cfg)
     datasets = task.build_datasets(cfg)
     model = task.build_model(cfg)
-
-    # =================================================================
-    # --- 新增的LoRA/QLoRA改造逻辑 ---
-    print("======> 正在对LLM应用LoRA/QLoRA改造 <======")
-    
-    # 步骤A（QLoRA需要）：为k-bit量化训练做准备
-    # 这会修复一些兼容性问题
-    model.opt_model = prepare_model_for_kbit_training(model.opt_model)
-    
-    # 步骤B：定义LoRA配置
-    lora_config = LoraConfig(
-        r=16,  # LoRA的秩，一个关键超参数，通常是8, 16, 32, 64
-        lora_alpha=32, # LoRA的alpha，通常是r的两倍
-        target_modules=["q_proj", "v_proj"], # 指定要对哪些线性层应用LoRA，对于OPT模型，通常是q_proj和v_proj
-        lora_dropout=0.05,
-        bias="none",
-        task_type="CAUSAL_LM" # 任务类型，对于OPT是因果语言模型
-    )
-    
-    # 步骤C：将LoRA配置应用到模型上
-    model.opt_model = get_peft_model(model.opt_model, lora_config)
-    
-    # 步骤D（可选但推荐）：打印出可训练参数，验证LoRA是否应用成功
-    model.print_trainable_parameters()
-    print("======> LoRA/QLoRA 改造完成 <======")
-    # =================================================================
-
 
     runner = get_runner_class(cfg)(
         cfg=cfg, job_id=job_id, task=task, model=model, datasets=datasets

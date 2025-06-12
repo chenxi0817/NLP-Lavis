@@ -24,12 +24,20 @@ datasets:
     #     images:
     #         storage: '/export/share/datasets/vision/coco/images/'
 
+    # build_info:
+    #     # 指向你的标注文件所在的文件夹
+    #     annotations:
+    #         storage: '/root/aigc/zsh/nlp/dataset/Annotations'
+    #     # 指向你的图片文件所在的文件夹
+    #     images:
+    #         storage: '/root/aigc/zsh/nlp/dataset/Images'
+
 run:
   task: vqa
   # optimization-specific
   batch_size_train: 16
-  batch_size_eval: 64
-  num_workers: 4
+  batch_size_eval: 32
+  num_workers: 3
 
   # inference-specific
   max_len: 10
