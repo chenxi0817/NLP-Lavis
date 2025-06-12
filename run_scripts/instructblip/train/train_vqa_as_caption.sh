@@ -1,0 +1,1 @@
+python -m torch.distributed.run --nproc_per_node=3 train.py --cfg-path /root/aigc/zsh/nlp/LAVIS/lavis/projects/instructblip/instructblip_vqa_as_caption.yaml

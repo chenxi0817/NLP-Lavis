@@ -31,6 +31,9 @@ from lavis.processors import *
 from lavis.runners import *
 from lavis.tasks import *
 
+# train.py 顶部
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Training")
@@ -90,8 +93,6 @@ def main():
     setup_logger()
 
     cfg.pretty_print()
-
-    # exit(0)
 
     task = tasks.setup_task(cfg)
     datasets = task.build_datasets(cfg)
