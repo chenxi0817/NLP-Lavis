@@ -16,7 +16,8 @@ model, vis_processors, _ = load_model_and_preprocess(
 vis_processors.keys()
 
 image = vis_processors["eval"](raw_image).unsqueeze(0).to(device)
+images = torch.cat([image, image], dim=0)
 
-ans = model.generate({"image": image, "prompt": "Question: which city is this? Answer:"})
+ans = model.predict_answers({"image": images, "text_input": ["Question: which city is this? Answer:", "NOTHING"]})
 
 print(ans)

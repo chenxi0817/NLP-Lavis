@@ -100,6 +100,8 @@ class Blip2OPT(Blip2Base):
             "\n", add_special_tokens=False
         ).input_ids[0]
 
+        print('hidden-size', self.Qformer.config.hidden_size, self.opt_model.config.hidden_size)
+
         self.opt_proj = nn.Linear(
             self.Qformer.config.hidden_size, self.opt_model.config.hidden_size
         )
@@ -340,6 +342,10 @@ class Blip2OPT(Blip2Base):
             else:
                 text_input = samples["text_input"]
 
+            # print(image.shape)
+            # text_input = ['Q: ' + text + ' Answer:' for text in text_input]
+            # print('text_input:', text_input)
+
             self.opt_tokenizer.padding_side = "left"
             opt_tokens = self.opt_tokenizer(
                 text_input,
@@ -369,6 +375,8 @@ class Blip2OPT(Blip2Base):
                 outputs, skip_special_tokens=True
             )
             output_text = [text.strip() for text in output_text]
+
+            # print('output_text:', output_text)
         if self._apply_lemmatizer or ("apply_lemmatizer" in samples.keys() and samples["apply_lemmatizer"]):
             output_text = self._lemmatize(output_text)
 
@@ -413,6 +421,8 @@ class Blip2OPT(Blip2Base):
         
     @classmethod
     def from_config(cls, cfg):
+        print(cfg)
+
         vit_model = cfg.get("vit_model", "eva_clip_g")
         img_size = cfg.get("image_size")
         num_query_token = cfg.get("num_query_token")

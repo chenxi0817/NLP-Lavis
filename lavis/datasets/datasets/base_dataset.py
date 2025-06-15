@@ -24,6 +24,8 @@ class BaseDataset(Dataset):
         """
         self.vis_root = vis_root
         self.annotation = []
+
+        counter = 0
         for ann_path in ann_paths:
             if any(ext in ann_path for ext in ['csv', 'tsv']):
                 df = pd.read_csv(ann_path)
@@ -41,7 +43,7 @@ class BaseDataset(Dataset):
                     elif isinstance(loaded, dict):
                        self.annotation.extend([{"sample_id": k, **v} if isinstance(v, dict) else {"sample_id": k, "data": v} for k, v in loaded.items()])
 
-
+        self.annotation = self.annotation
         self.vis_processor = vis_processor
         self.text_processor = text_processor
 

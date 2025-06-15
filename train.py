@@ -100,7 +100,12 @@ def main():
 
     """
     task = <class 'lavis.tasks.image_text_pretrain.ImageTextPretrainTask'> Actually BaseTask
-    datasets =
+    datasets = {
+        'coco_vqa': {
+            'train': <lavis.datasets.datasets.coco_vqa_datasets.COCOVQADataset>
+            'eval': <
+        }
+    }
     model = Blip2QFormer() ?
     runner = <class 'lavis.runners.runner_base.RunnerBase'>
     """

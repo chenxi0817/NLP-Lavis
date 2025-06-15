@@ -42,6 +42,7 @@ class COCOVQADataset(VQADataset, __DisplMixin):
 
         image = self.vis_processor(image)
         question = self.text_processor(ann["question"])
+        question = 'Question: ' + question + 'Answer: ' # NOTE: Inst FT
 
         answer_weight = {}
         for answer in ann["answer"]:
@@ -85,6 +86,7 @@ class COCOVQAEvalDataset(VQAEvalDataset, __DisplMixin):
         self.vis_root = vis_root
 
         self.annotation = json.load(open(ann_paths[0]))
+        self.annotation = self.annotation
 
         answer_list_path = ann_paths[1]
         if os.path.exists(answer_list_path):
@@ -112,6 +114,7 @@ class COCOVQAEvalDataset(VQAEvalDataset, __DisplMixin):
 
         image = self.vis_processor(image)
         question = self.text_processor(ann["question"])
+        question = 'Question: ' + question + ' Answer: ' # NOTE: Inst FT
 
         return {
             "image": image,
