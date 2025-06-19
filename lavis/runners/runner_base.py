@@ -31,9 +31,9 @@ from lavis.datasets.datasets.dataloader_utils import (
     PrefetchLoader,
 )
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import DataLoader, DistributedSampler
+from torch.utils.data import DataLoader, DistributedSampler, Subset
 from torch.utils.data.dataset import ChainDataset
-
+import random
 
 @registry.register_runner("runner_base")
 class RunnerBase:
@@ -182,7 +182,9 @@ class RunnerBase:
         if self._dataloaders is None:
             # reoganize datasets by split and concatenate/chain if necessary
             dataset_ratios = self.config.run_cfg.get("train_dataset_ratios", None)
-
+            logging.info(
+                "train_dataset_ratios: {}".format(dataset_ratios)
+            )
             # concatenate map-style datasets and chain wds.DataPipe datasets separately
             # training set becomes a tuple (ConcatDataset, ChainDataset), both are
             # optional but at least one of them is required. The resultant ConcatDataset
@@ -246,7 +248,11 @@ class RunnerBase:
                     collate_fns.append([getattr(d, "collater", None) for d in dataset])
                 else:
                     collate_fns.append(getattr(dataset, "collater", None))
-
+            logging.info(
+                "datasets:{}".format(
+                    [d.__class__.__name__ for d in datasets]
+                )
+            )
             dataloaders = self.create_loaders(
                 datasets=datasets,
                 num_workers=self.config.run_cfg.num_workers,
@@ -428,7 +434,6 @@ class RunnerBase:
         # testing phase
         test_epoch = "best" if len(self.valid_splits) > 0 else cur_epoch
         self.evaluate(cur_epoch=test_epoch, skip_reload=self.evaluate_only)
-
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
         logging.info("Training time {}".format(total_time_str))
@@ -576,6 +581,13 @@ class RunnerBase:
                     ratios=dataset_ratios,
                 )
             else:
+                total_num_samples = len(dataset)
+                if dataset_ratios is not None and is_train:
+                    sample_size = dataset_ratios * total_num_samples
+                    indeices = random.sample(
+                        range(total_num_samples), int(sample_size)
+                    )
+                    dataset = Subset(dataset, indeices)
                 loader = _create_loader(dataset, num_workers, bsz, is_train, collate_fn)
 
             loaders.append(loader)
