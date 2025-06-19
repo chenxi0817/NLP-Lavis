@@ -68,24 +68,68 @@ class BlipCaptionProcessor(BaseProcessor):
         return caption
 
 
+# @registry.register_processor("blip_question")
+# class BlipQuestionProcessor(BaseProcessor):
+#     def __init__(self, max_words=50):
+#         self.max_words = max_words
+
+#     def __call__(self, question):
+#         return self.pre_question(question)
+
+#     @classmethod
+#     def from_config(cls, cfg=None):
+#         if cfg is None:
+#             cfg = OmegaConf.create()
+
+#         max_words = cfg.get("max_words", 50)
+
+#         return cls(max_words=max_words)
+
+#     def pre_question(self, question):
+#         question = re.sub(
+#             r"([.!\"()*#:;~])",
+#             "",
+#             question.lower(),
+#         )
+#         question = question.rstrip(" ")
+
+#         # truncate question
+#         question_words = question.split(" ")
+#         if len(question_words) > self.max_words:
+#             question = " ".join(question_words[: self.max_words])
+
+#         return question
+
 @registry.register_processor("blip_question")
 class BlipQuestionProcessor(BaseProcessor):
-    def __init__(self, max_words=50):
+    # 步骤A：修改__init__方法，增加一个可选的prompt参数，并将其存为实例属性
+    def __init__(self, prompt="", max_words=50):
+        self.prompt = prompt
         self.max_words = max_words
 
+    # 步骤B：修改__call__方法，在处理文本前先应用prompt
     def __call__(self, question):
+        # 只有当prompt非空时，才进行格式化，这使得它向下兼容
+        if self.prompt:
+            question = self.prompt.format(question)
+
         return self.pre_question(question)
 
+    # 步骤C：修改from_config类方法，让它能从YAML配置中读取prompt
     @classmethod
     def from_config(cls, cfg=None):
         if cfg is None:
             cfg = OmegaConf.create()
 
+        # 新增这一行，用于从配置中读取prompt的值
+        prompt = cfg.get("prompt", "")
         max_words = cfg.get("max_words", 50)
 
-        return cls(max_words=max_words)
+        # 将读取到的prompt传递给__init__方法
+        return cls(prompt=prompt, max_words=max_words)
 
     def pre_question(self, question):
+        # pre_question方法保持不变，继续执行原有的文本清洗逻辑
         question = re.sub(
             r"([.!\"()*#:;~])",
             "",

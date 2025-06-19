@@ -129,53 +129,26 @@ class VQATask(BaseTask):
 
         return datasets
 
-    # VQATask类中新增此方法
-    def train_step(self, model, samples):
-        """
-        覆写父类的train_step方法，以处理键名不匹配问题。
-        """
-        # 关键一行：将数据加载器提供的'answer'键，复制一份并命名为'text_output'
-        # 这是为了适配所有生成式模型（如BLIP2-OPT, InstructBLIP）在训练时对输入格式的期望
-        samples["text_output"] = samples["answer"]
-    
-        # 调用模型的forward方法，计算损失
-        loss = model(samples)["loss"]
-    
-        return loss, {"loss": loss}
-
-    # 用这个新版本完整替换旧的 valid_step 方法
     def valid_step(self, model, samples):
+        answers = model.predict_answers(
+            samples=samples,
+            answer_list=self.answer_list,
+            inference_method=self.inference_method,
+            num_beams=self.num_beams,
+            max_len=self.max_len,
+            min_len=self.min_len,
+            num_ans_candidates=self.num_ans_candidates,
+            prompt=self.prompt,
+        )
         pred_qa_pairs = []
+
         question_id = samples["question_id"]
-    
-        # 关键修改：根据配置文件中的 inference_method 进行判断
-        if self.inference_method == "generate":
-            # 如果是生成模式，调用模型的 .generate() 方法
-            answers = model.generate(
-                samples,
-                use_nucleus_sampling=False,
-                num_beams=self.num_beams,
-                max_length=self.max_len, # 注意：generate通常使用max_length
-                min_length=self.min_len,
-            )
-        else: # 否则，执行原来的分类/排序逻辑
-            answers = model.predict_answers(
-                samples=samples,
-                answer_list=self.answer_list,
-                inference_method=self.inference_method,
-                num_beams=self.num_beams,
-                max_len=self.max_len,
-                min_len=self.min_len,
-                num_ans_candidates=self.num_ans_candidates,
-                prompt=self.prompt,
-            )
-    
         for answer, ques_id in zip(answers, question_id):
             ques_id = int(ques_id.item()) if isinstance(ques_id, torch.Tensor) else ques_id
             if ques_id != int and is_convertible_to_int(ques_id):
                 ques_id = int(ques_id)
             pred_qa_pairs.append({"question_id": ques_id, "answer": answer})
-    
+
         return pred_qa_pairs
 
     def after_evaluation(self, val_result, split_name, **kwargs):

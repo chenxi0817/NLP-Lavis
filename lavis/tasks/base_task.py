@@ -14,6 +14,7 @@ from lavis.common.dist_utils import get_rank, get_world_size, is_main_process, i
 from lavis.common.logger import MetricLogger, SmoothedValue
 from lavis.common.registry import registry
 from lavis.datasets.data_utils import prepare_sample
+import lavis.common.dist_utils as dist_utils
 
 
 class BaseTask:
@@ -60,6 +61,45 @@ class BaseTask:
         return datasets
 
     def train_step(self, model, samples):
+        # 只在主进程 (rank 0) 打印，避免多卡输出混乱
+        if dist_utils.get_rank() == 0:
+            # 检查这是否是每个epoch的第一个batch，如果是，就打印
+            # (为了避免日志刷屏，我们只看第一个batch的内容就足够了)
+            if not hasattr(self, '_has_printed_batch'):
+                self._has_printed_batch = True # 设置一个标志，确保只打印一次
+    
+                print("\n" + "="*50)
+                print("DEBUG: Inspecting the first training batch")
+                print("="*50)
+    
+                # 打印 samples 字典中所有的键，看看数据管道提供了什么
+                print(f"\n[INFO] Keys in the 'samples' batch: {samples.keys()}")
+    
+                # 打印图像张量的形状 (Batch_size, Channels, Height, Width)
+                if "image" in samples:
+                    print(f"[INFO] Image tensor shape: {samples['image'].shape}")
+    
+                # 打印文本输入 (问题) 的内容 (只打印前几个样本)
+                if "text_input" in samples:
+                    print("\n--- Content of 'text_input' (Questions) ---")
+                    for i, question in enumerate(samples["text_input"][:20]): # 只看前3个
+                        print(f"  Sample {i}: {question}")
+    
+                # 打印原始答案的内容 (只打印前几个样本)
+                if "answer" in samples:
+                    print("\n--- Content of 'answer' (Ground Truth) ---")
+                    for i, answer in enumerate(samples["answer"][:20]): # 只看前3个
+                        print(f"  Sample {i}: {answer}")
+    
+                # 打印其他你感兴趣的键
+                if "question_id" in samples:
+                    print(f"\n[INFO] Question IDs: {samples['question_id'][:3]}")
+    
+                print("\n" + "="*50)
+                print("DEBUG: End of inspection. Continuing training...")
+                print("="*50 + "\n")
+        # --- 调试代码结束 ---
+        # =================================================================
         output = model(samples)
         loss_dict = {}
         for k,v in output.items():
