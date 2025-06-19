@@ -341,7 +341,7 @@ class Blip2OPT(Blip2Base):
             else:
                 prompt = self.prompt
 
-            prompt = [prompt] * image.size(0)
+            prompt = [prompt.format(q) for q in samples["text_input"]]
 
             opt_tokens = self.opt_tokenizer(
                 prompt,
