@@ -98,28 +98,53 @@ def main():
 
     # =================================================================
     # --- 新增的LoRA/QLoRA改造逻辑 ---
-    print("======> 正在对LLM应用LoRA/QLoRA改造 <======")
+    # print("======> 正在对LLM应用LoRA/QLoRA改造 <======")
     
-    # 步骤A（QLoRA需要）：为k-bit量化训练做准备
-    # 这会修复一些兼容性问题
-    model.opt_model = prepare_model_for_kbit_training(model.opt_model)
+    # # 步骤A（QLoRA需要）：为k-bit量化训练做准备
+    # # 这会修复一些兼容性问题
+    # model.opt_model = prepare_model_for_kbit_training(model.opt_model)
     
-    # 步骤B：定义LoRA配置
-    lora_config = LoraConfig(
-        r=16,  # LoRA的秩，一个关键超参数，通常是8, 16, 32, 64
-        lora_alpha=32, # LoRA的alpha，通常是r的两倍
-        target_modules=["q_proj", "v_proj"], # 指定要对哪些线性层应用LoRA，对于OPT模型，通常是q_proj和v_proj
-        lora_dropout=0.05,
-        bias="none",
-        task_type="CAUSAL_LM" # 任务类型，对于OPT是因果语言模型
-    )
+    # # 步骤B：定义LoRA配置
+    # lora_config = LoraConfig(
+    #     r=16,  # LoRA的秩，一个关键超参数，通常是8, 16, 32, 64
+    #     lora_alpha=32, # LoRA的alpha，通常是r的两倍
+    #     target_modules=["q_proj", "v_proj"], # 指定要对哪些线性层应用LoRA，对于OPT模型，通常是q_proj和v_proj
+    #     lora_dropout=0.05,
+    #     bias="none",
+    #     task_type="CAUSAL_LM" # 任务类型，对于OPT是因果语言模型
+    # )
     
-    # 步骤C：将LoRA配置应用到模型上
-    model.opt_model = get_peft_model(model.opt_model, lora_config)
-    
+    # # 步骤C：将LoRA配置应用到模型上
+    # model.opt_model = get_peft_model(model.opt_model, lora_config)
+
+
+    trainable_params = 0
+    for p in model.parameters():
+        if p.requires_grad:
+            print(f"  - {p.shape} ({p.numel()})")
+            trainable_params += p.numel()
+    print(f"可训练参数总量: {trainable_params:,}")
     # 步骤D（可选但推荐）：打印出可训练参数，验证LoRA是否应用成功
-    model.print_trainable_parameters()
-    print("======> LoRA/QLoRA 改造完成 <======")
+    # if hasattr(model.opt_model, "print_trainable_parameters"):
+    #     # 如果opt_model有这个方法，直接调用
+    #     model.opt_model.print_trainable_parameters()
+    # else:
+    #     # 否则手动计算并打印
+    #     total_params = sum(p.numel() for p in model.parameters())
+    #     for p in model.parameters():
+    #         if p.requires_grad:
+    #             print(f"  - {p.shape} ({p.numel()})")
+    #     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        
+    #     print(f"可训练参数总量: {trainable_params:,} ({100 * trainable_params / total_params:.2f}% 的总参数)")
+    #     print(f"总参数量: {total_params:,}")
+        
+    #     # 打印LoRA层
+    #     print("LoRA层:")
+    #     for name, param in model.named_parameters():
+    #         if "lora" in name.lower() and param.requires_grad:
+    #             print(f"  - {name} ({param.shape})")
+    # print("======> LoRA/QLoRA 改造完成 <======")
     # =================================================================
 
 

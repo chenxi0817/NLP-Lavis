@@ -136,8 +136,31 @@ class VQATask(BaseTask):
         """
         # 关键一行：将数据加载器提供的'answer'键，复制一份并命名为'text_output'
         # 这是为了适配所有生成式模型（如BLIP2-OPT, InstructBLIP）在训练时对输入格式的期望
-        samples["text_output"] = samples["answer"]
-    
+        # logging.info("({},{},{},{})".format(len(samples["text_input"]), len(samples["answer"]), len(samples['weight']), len(samples["n_answers"])))
+        if "answer" in samples and "n_answers" in samples and "weight" in samples:
+            batch_size = len(samples["n_answers"])
+            samples["text_output"] = [""] * batch_size
+            answers_flat = samples["answer"]
+            weights_flat = samples["weight"]
+            n_answers = samples["n_answers"]
+            answer_idx = 0
+            for i, n_ans in enumerate(n_answers):
+                # 获取当前问题的答案和权重
+                current_answers = answers_flat[answer_idx:answer_idx + n_ans]
+                current_weights = weights_flat[answer_idx:answer_idx + n_ans]
+                
+                # 找到最大权重的索引
+                max_weight_idx = current_weights.index(max(current_weights))
+                best_answer = current_answers[max_weight_idx]
+                
+                # 现在可以安全地赋值
+                samples["text_output"][i] = best_answer
+                
+                answer_idx += n_ans
+        
+        # logging.info("({},{})".format(len(samples["text_input"]), len(samples["text_output"])))
+        
+        # logging.info(len(samples["text_output"]))
         # 调用模型的forward方法，计算损失
         loss = model(samples)["loss"]
     
